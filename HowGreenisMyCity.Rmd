@@ -1,0 +1,121 @@
+---
+title: "Layered maps in r with leaflet using Open Data"
+output: html_notebook
+---
+
+## Introduction
+Everyone loves a map. This shows a few simple steps that bring maps to life in r, in an output format that can be used more widely on the web. Free maps made with free software from free open data. Low cost fun at its best!   
+
+In this example open data form the NSW Open data aporal is used and to show a nice transition in tree canopy from the City of Ryde in NSW, Australia.  
+
+Just a few libraries. These are not pre-loaded so please install them prior with 
+install.packages("dplyr")
+install.packages("leaflet")
+install.packages("rgdal")
+
+
+```{r, echo=FALSE}
+
+require(dplyr)
+require(leaflet)
+require(rgdal)
+```
+
+## 1 Rule for spatial files   
+Don't be tempted (like I was working late on a project) to save time and bandwidth by only downloading the 'shapefile' i.e. the one with the extension "*.shp". If you do, you will receive a read error in the next step. Most things you read seem to only talk about shapefiles but you have been warned: all the files in the zip are required to make your shapefile a success!  
+
+
+## 2 Reading the shape file
+Package rgdal is a  solid current package for reading in shapefile data. Let's try reading in the shape files from the web url. The three steps shown here are, downloading the shapefile form the web, unzipping it and reading it as a shapefile into R. There are two arguments to the shapefile read the "dsn"" and the "layer". The "dsn" is the folder (including path) to where the set of shapefiles are stored and the "layer" is the name of the layer you are trying to import that will usually be the name of the shapefile, excluding the file extension.   
+
+
+```{r, echo=FALSE}
+# i. Download the zipped set of shapefiles
+url_1 <- "https://data.nsw.gov.au/data/dataset/d6060184-2f3a-4347-8d8d-df202ce6a668/resource/48eb016d-82e2-485a-9d22-0aa3513efa75/download/Tree-Canopy-2006.zip"
+file_1 <- "Tree-Canopy-2006.zip"
+
+# ii. this will unzip it to your current directory
+download.file(url_1, file_1) 
+unzip(file_1, exdir =  "~/Tree-Canopy-2006")
+
+#repeat for the second set of shapefiles
+url_2 <- "https://data.nsw.gov.au/data/dataset/aa0d8a8a-a322-41e4-98bb-7bdbc5277d2a/resource/07020223-aa9b-4e57-af88-7f7a8d18b79c/download/Tree-Canopy-2013.zip"
+file_2 <- "Tree-Canopy-2013.zip"
+download.file(url_2, file_2) 
+unzip(file_2, exdir =  "~/Tree-Canopy-2013")
+
+# iii. read in the shape file
+Ryde_2006_canopy <- readOGR(dsn="~/Tree-Canopy-2006", layer = "Tree Canopy 2006")
+Ryde_2013_canopy <- readOGR(dsn="~/Tree-Canopy-2013", layer = "Tree Canopy 2013")
+ 
+```
+## 3 Basic plots in R  
+This is a basic plot of the polygon data in R. We also do this to see how the projection has been encoded in the shapefile. 
+
+```{r}
+plot(Ryde_2006_canopy, axes=TRUE)
+
+
+```
+
+  
+  One thing we can see form the axes is that this shapefile has a projecttion that is not resolving directly to latitude and longitude values that leaflet will recognise. So in this next step we are going to convert the shapefile and replot it to show the expeted values on the axis. For this setp we need rgeos library
+install.packages("rgeos")  
+  
+  
+```{r}
+require(rgeos)
+#convert
+map_wgs84_2006 <- spTransform(Ryde_2006_canopy, CRS("+proj=longlat +datum=WGS84"))
+map_wgs84_2013 <- spTransform(Ryde_2013_canopy, CRS("+proj=longlat +datum=WGS84"))
+
+#now check the plot again
+plot(map_wgs84_2006, axes=TRUE)
+```
+  
+  Excellent, we can now see the latitude and longitude values on the axis. It's ready for leaflet.
+  
+  
+## 3 Visualising with leaflet  
+
+This final step creates the map in leaflet and is visuallu more appealing than the plot
+
+```{r}
+How_greening_is_my_city <- leaflet() %>%
+  addTiles() %>%
+  addPolygons(data = map_wgs84_2006, 
+              fillColor = c("transparent", "green"),
+              color = "#000000", 
+              opacity = 0.1, 
+              fillOpacity = 0.4, 
+              stroke = TRUE,
+              weight = 1.5, group = "2006"  ) %>%
+  addPolygons(data = map_wgs84_2013, 
+              fillColor = c("transparent", "darkgreen"),
+              color = "#000000", 
+              opacity = 0.1, 
+              fillOpacity = 0.4, 
+              stroke = TRUE,
+              weight = 1.5, group = "2013"  ) %>%
+
+  addLayersControl(
+    overlayGroups = c("2006", "2013"),
+    options = layersControlOptions(collapsed = FALSE)
+  )
+How_greening_is_my_city 
+
+```
+
+  
+  
+  
+## 4 Saving out the html map  
+
+```{r}
+library(htmlwidgets)
+saveWidget(How_greening_is_my_city , file="How_greening_is_my_city.html")
+```
+
+
+A more advanced skill is overlaying point data onto your map, or assigning observations with lat and long data onto the nearest polygon. This is achieved with a spatial merge or join. And we look at it in a future tutorial.
+
